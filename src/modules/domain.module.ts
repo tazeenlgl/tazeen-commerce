@@ -10,6 +10,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { LocationsModule } from './locations/locations.module';
 import { SalesModule } from './sales/sales.module';
 import { SalesReturnsModule } from './sales-returns/sales-returns.module';
+import { SalesExchangesModule } from './sales-exchanges/sales-exchanges.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
@@ -30,6 +31,7 @@ const MODULES = [
   LocationsModule,
   SalesModule,
   SalesReturnsModule,
+  SalesExchangesModule,
   InvoicesModule,
   OrdersModule,
   PaymentsModule,
