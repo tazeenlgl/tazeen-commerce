@@ -6,6 +6,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { RATE_LIMIT_STORE } from './security/rate-limit-store';
 import { createRateLimitMiddleware } from './security/rate-limit';
 import { createConcurrencyLimiter, createTimeoutMiddleware } from './security/protection.middleware';
+import { createOriginGuardMiddleware } from './security/origin-guard.middleware';
 import { requestLogger } from './common/middleware/request-logger.middleware';
 
 /** Shared by main.ts and tests so both run the same pipeline. */
@@ -18,6 +19,7 @@ export function setupApp(app: NestExpressApplication): void {
   app.disable('x-powered-by');
   app.use(helmet());
   // Cheap rejections first, before body parsing / routing / business logic.
+  app.use(createOriginGuardMiddleware(cfg.corsOrigins));
   app.use(createConcurrencyLimiter(sec.maxConcurrentRequests));
   app.use(createTimeoutMiddleware(sec.requestTimeoutMs));
   app.use(
