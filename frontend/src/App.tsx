@@ -51,9 +51,7 @@ import {
   Route,
   Routes,
 } from 'react-router-dom'
-
-const DEMO_USERNAME = 'demo'
-const DEMO_PASSWORD = 'Demo@12345'
+import { AuthProvider, useAuth } from './auth/AuthContext'
 
 const salesData = [
   { day: 'Mon', sales: 32000 },
@@ -195,29 +193,17 @@ const navItems = [
 ] as const
 
 
-function Login({ onLogin }: { onLogin: () => void }) {
-  const [username, setUsername] = useState('')
+function Login() {
+  const { login, loginError } = useAuth()
+  const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  const fillDemo = () => {
-    setUsername(DEMO_USERNAME)
-    setPassword(DEMO_PASSWORD)
-    setError('')
-  }
-
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (
-      username.trim() === DEMO_USERNAME &&
-      password === DEMO_PASSWORD
-    ) {
-      onLogin()
-      return
-    }
-
-    setError('Invalid demo credentials.')
+    setSubmitting(true)
+    await login(phone.trim(), password)
+    setSubmitting(false)
   }
 
   return (
@@ -307,13 +293,14 @@ function Login({ onLogin }: { onLogin: () => void }) {
             <form onSubmit={submit} className="space-y-5">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Username
+                  Phone
                 </label>
 
                 <input
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter username"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Enter phone number"
+                  autoComplete="username"
                   className="h-12 w-full rounded-lg border border-slate-200 px-4 text-sm outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
                 />
               </div>
@@ -328,60 +315,28 @@ function Login({ onLogin }: { onLogin: () => void }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
+                  autoComplete="current-password"
                   className="h-12 w-full rounded-lg border border-slate-200 px-4 text-sm outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
                 />
               </div>
 
-              {error && (
+              {loginError && (
                 <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
-                  {error}
+                  {loginError}
                 </div>
               )}
 
               <button
-                type="button"
-                onClick={fillDemo}
-                className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50 text-sm font-medium text-slate-700 hover:bg-slate-100"
-              >
-                Fill Demo Login
-              </button>
-
-              <button
                 type="submit"
-                className="h-12 w-full rounded-lg bg-slate-900 text-sm font-semibold text-white hover:bg-slate-800"
+                disabled={submitting}
+                className="h-12 w-full rounded-lg bg-slate-900 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
               >
-                Sign In
+                {submitting ? 'Signing in...' : 'Sign In'}
               </button>
             </form>
 
-            <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
-              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Demo Environment
-              </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <div className="text-xs text-slate-400">
-                    Username
-                  </div>
-                  <div className="mt-1 font-medium text-slate-700">
-                    demo
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs text-slate-400">
-                    Password
-                  </div>
-                  <div className="mt-1 font-medium text-slate-700">
-                    Demo@12345
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <p className="mt-8 text-center text-xs text-slate-400">
-              Tazeen POS · Demo Environment
+              Tazeen POS
             </p>
           </div>
         </section>
@@ -15797,6 +15752,7 @@ function Placeholder({ title }: { title: string }) {
 }
 
 function Shell({ onLogout }: { onLogout: () => void }) {
+  const { user } = useAuth()
   const [mobileMenu, setMobileMenu] = useState(false)
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({
     POS: true,
@@ -15968,16 +15924,16 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 
             <button className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-slate-50">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
-                D
+                {(user?.full_name ?? '?').charAt(0).toUpperCase()}
               </div>
 
               <div className="hidden text-left sm:block">
                 <div className="text-xs font-semibold">
-                  Demo User
+                  {user?.full_name ?? ''}
                 </div>
 
                 <div className="text-[10px] text-slate-400">
-                  Administrator
+                  {user?.phone ?? ''}
                 </div>
               </div>
 
@@ -16077,27 +16033,29 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 }
 
 function App() {
-  const [authenticated, setAuthenticated] = useState(false)
+  const { user, loading, logout } = useAuth()
 
-  if (!authenticated) {
+  if (loading) {
     return (
-      <Login
-        onLogin={() => setAuthenticated(true)}
-      />
+      <div className="flex min-h-screen items-center justify-center bg-[#f5f6f8] text-sm text-slate-400">
+        Loading...
+      </div>
     )
   }
 
-  return (
-    <Shell
-      onLogout={() => setAuthenticated(false)}
-    />
-  )
+  if (!user) {
+    return <Login />
+  }
+
+  return <Shell onLogout={() => void logout()} />
 }
 
 export default function Root() {
   return (
     <BrowserRouter>
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </BrowserRouter>
   )
 }
