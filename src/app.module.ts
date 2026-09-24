@@ -12,6 +12,7 @@ import { PurchaseInvoicesModule } from './modules/purchase-invoices/purchase-inv
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { SupplierPaymentsModule } from './modules/supplier-payments/supplier-payments.module';
 import { PurchaseReturnsModule } from './modules/purchase-returns/purchase-returns.module';
+import { InventoryTransfersModule } from './modules/inventory-transfers/inventory-transfers.module';
 import { PermissionsModule } from './auth/permissions/permissions.module';
 import { AuditModule } from './auth/audit/audit.module';
 
@@ -34,6 +35,7 @@ import { AuditModule } from './auth/audit/audit.module';
     SuppliersModule,
     SupplierPaymentsModule,
     PurchaseReturnsModule,
+    InventoryTransfersModule,
     AuthModule,
     PermissionsModule,
     AuditModule,

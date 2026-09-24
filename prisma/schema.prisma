@@ -302,6 +302,8 @@ model locations {
   sales_invoices      sales_invoices[]
   sales_returns       sales_returns[]
   purchase_returns    purchase_returns[]
+  transfers_as_source      transfers[]      @relation("TransferSource")
+  transfers_as_destination transfers[]      @relation("TransferDestination")
 
   @@index([is_default], map: "locations_default_idx")
   @@index([location_name], map: "locations_name_idx")
@@ -355,6 +357,7 @@ model product_skus {
   purchase_return_items      purchase_return_items[]
   sales_invoice_items        sales_invoice_items[]
   sales_return_items         sales_return_items[]
+  transfer_items             transfer_items[]
 
   @@unique([product_id, sequence_no], map: "product_skus_sequence_unique")
   @@index([product_id], map: "product_skus_product_idx")
@@ -402,6 +405,7 @@ model products {
   purchase_return_items      purchase_return_items[]
   sales_invoice_items        sales_invoice_items[]
   sales_return_items         sales_return_items[]
+  transfer_items             transfer_items[]
 
   @@index([category_id], map: "products_category_idx")
   @@index([product_name], map: "products_name_idx")
@@ -527,6 +531,43 @@ model purchase_returns {
   @@index([location_id], map: "purchase_returns_location_idx")
   @@index([return_date], map: "purchase_returns_date_idx")
   @@index([status])
+}
+
+model transfer_items {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transfer_id  String       @db.Uuid
+  product_id   String       @db.Uuid
+  sku_id       String       @db.Uuid
+  quantity     Int
+  created_at   DateTime     @default(now()) @db.Timestamptz(6)
+  transfers    transfers    @relation(fields: [transfer_id], references: [id], map: "transfer_items_transfer_fk")
+  products     products     @relation(fields: [product_id], references: [id], map: "transfer_items_product_fk")
+  product_skus product_skus @relation(fields: [sku_id], references: [id], map: "transfer_items_sku_fk")
+
+  @@index([transfer_id], map: "transfer_items_transfer_idx")
+  @@index([sku_id], map: "transfer_items_sku_idx")
+}
+
+model transfers {
+  id                       String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transfer_no              String           @unique @db.VarChar(50)
+  source_location_id       String           @db.Uuid
+  destination_location_id  String           @db.Uuid
+  status                   transfer_status  @default(Requested)
+  reason                   String           @db.VarChar(200)
+  requested_at             DateTime         @default(now()) @db.Timestamptz(6)
+  approved_at              DateTime?        @db.Timestamptz(6)
+  reversed_at              DateTime?        @db.Timestamptz(6)
+  created_at               DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime         @default(now()) @db.Timestamptz(6)
+  transfer_items           transfer_items[]
+  source_location          locations        @relation("TransferSource", fields: [source_location_id], references: [id], onDelete: Restrict, map: "transfers_source_location_fk")
+  destination_location     locations        @relation("TransferDestination", fields: [destination_location_id], references: [id], onDelete: Restrict, map: "transfers_destination_location_fk")
+
+  @@index([source_location_id], map: "transfers_source_idx")
+  @@index([destination_location_id], map: "transfers_destination_idx")
+  @@index([status])
+  @@index([requested_at], map: "transfers_requested_idx")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -856,6 +897,12 @@ enum purchase_invoice_status {
 enum purchase_return_status {
   Completed
   Cancelled
+}
+
+enum transfer_status {
+  Requested
+  Approved
+  Reversed
 }
 
 enum sales_invoice_status {
