@@ -73,6 +73,9 @@ describeIfDb('inventory stock concurrency (real PostgreSQL)', () => {
   afterAll(async () => {
     await prisma.inventory_movements.deleteMany({ where: { location_id: locationId } });
     await prisma.inventory_stock.deleteMany({ where: { location_id: locationId } });
+    // purchase_return_items now FK-references purchase_invoice_items (PURCHASE-RETURN-01);
+    // clear it first so this cleanup's broad delete below doesn't hit a restrict violation.
+    await prisma.purchase_return_items.deleteMany({ where: { product_skus: { product_id: { not: undefined } } } });
     await prisma.purchase_invoice_items.deleteMany({ where: { product_skus: { product_id: { not: undefined } } } });
     await prisma.purchase_invoices.deleteMany({ where: { location: 'Concurrency Test Warehouse' } });
     await prisma.product_skus.deleteMany({ where: { products: { category_id: categoryId } } });

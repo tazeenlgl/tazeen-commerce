@@ -30,6 +30,7 @@ model Supplier {
   supplier_credit_notes supplier_credit_notes[]
   supplier_ledger       supplier_ledger[]
   supplier_payments     supplier_payments[]
+  purchase_returns      purchase_returns[]
 
   @@index([supplierName])
   @@index([mobile])
@@ -300,6 +301,7 @@ model locations {
   inventory_stock     inventory_stock[]
   sales_invoices      sales_invoices[]
   sales_returns       sales_returns[]
+  purchase_returns    purchase_returns[]
 
   @@index([is_default], map: "locations_default_idx")
   @@index([location_name], map: "locations_name_idx")
@@ -350,6 +352,7 @@ model product_skus {
   product_sku_attributes     product_sku_attributes[]
   products                   products                     @relation(fields: [product_id], references: [id], map: "product_skus_product_fk")
   purchase_invoice_items     purchase_invoice_items[]
+  purchase_return_items      purchase_return_items[]
   sales_invoice_items        sales_invoice_items[]
   sales_return_items         sales_return_items[]
 
@@ -396,6 +399,7 @@ model products {
   product_subcategories      product_subcategories?       @relation(fields: [subcategory_id], references: [id], onDelete: Restrict, map: "products_subcategory_fk")
   suppliers                  Supplier?                    @relation(fields: [supplier_id], references: [id], onDelete: Restrict, map: "products_supplier_fk")
   purchase_invoice_items     purchase_invoice_items[]
+  purchase_return_items      purchase_return_items[]
   sales_invoice_items        sales_invoice_items[]
   sales_return_items         sales_return_items[]
 
@@ -426,6 +430,7 @@ model purchase_invoice_items {
   purchase_invoices   purchase_invoices @relation(fields: [purchase_invoice_id], references: [id], map: "purchase_invoice_items_invoice_fk")
   products            products          @relation(fields: [product_id], references: [id], map: "purchase_invoice_items_product_fk")
   product_skus        product_skus      @relation(fields: [sku_id], references: [id], map: "purchase_invoice_items_sku_fk")
+  purchase_return_items purchase_return_items[]
 
   @@index([purchase_invoice_id], map: "purchase_invoice_items_invoice_idx")
   @@index([product_id], map: "purchase_invoice_items_product_idx")
@@ -458,12 +463,70 @@ model purchase_invoices {
   purchase_invoice_items purchase_invoice_items[]
   suppliers              Supplier                 @relation(fields: [supplier_id], references: [id])
   supplier_credit_notes  supplier_credit_notes[]
+  purchase_returns       purchase_returns[]
 
   @@index([invoice_no])
   @@index([purchase_date])
   @@index([supplier_id])
   @@index([supplier_name])
   @@index([supplier_state])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model purchase_return_items {
+  id                       String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchase_return_id       String                 @db.Uuid
+  original_invoice_item_id String                 @db.Uuid
+  product_id               String                 @db.Uuid
+  sku_id                   String                 @db.Uuid
+  quantity                 Int
+  purchase_rate            Decimal                @db.Decimal(14, 2)
+  gst_rate                 Decimal                @db.Decimal(5, 2)
+  taxable_value            Decimal                @db.Decimal(14, 2)
+  cgst_amount              Decimal                @default(0) @db.Decimal(14, 2)
+  sgst_amount              Decimal                @default(0) @db.Decimal(14, 2)
+  igst_amount              Decimal                @default(0) @db.Decimal(14, 2)
+  gst_amount               Decimal                @db.Decimal(14, 2)
+  total_value              Decimal                @db.Decimal(14, 2)
+  created_at               DateTime               @default(now()) @db.Timestamptz(6)
+  purchase_returns         purchase_returns       @relation(fields: [purchase_return_id], references: [id], map: "purchase_return_items_return_fk")
+  purchase_invoice_items   purchase_invoice_items @relation(fields: [original_invoice_item_id], references: [id], map: "purchase_return_items_invoice_item_fk")
+  products                 products               @relation(fields: [product_id], references: [id], map: "purchase_return_items_product_fk")
+  product_skus             product_skus           @relation(fields: [sku_id], references: [id], map: "purchase_return_items_sku_fk")
+
+  @@index([purchase_return_id], map: "purchase_return_items_return_idx")
+  @@index([original_invoice_item_id], map: "purchase_return_items_invoice_item_idx")
+  @@index([sku_id], map: "purchase_return_items_sku_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model purchase_returns {
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  return_no             String                  @unique @db.VarChar(50)
+  purchase_invoice_id   String                  @db.Uuid
+  supplier_id           String                  @db.Uuid
+  location_id           String                  @db.Uuid
+  return_date           DateTime                @default(now()) @db.Timestamptz(6)
+  reason                String                  @db.VarChar(200)
+  status                purchase_return_status  @default(Completed)
+  taxable_value         Decimal                 @default(0) @db.Decimal(14, 2)
+  cgst_amount           Decimal                 @default(0) @db.Decimal(14, 2)
+  sgst_amount           Decimal                 @default(0) @db.Decimal(14, 2)
+  igst_amount           Decimal                 @default(0) @db.Decimal(14, 2)
+  gst_amount            Decimal                 @default(0) @db.Decimal(14, 2)
+  total_value           Decimal                 @default(0) @db.Decimal(14, 2)
+  created_at            DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime                @default(now()) @db.Timestamptz(6)
+  purchase_return_items purchase_return_items[]
+  purchase_invoices     purchase_invoices       @relation(fields: [purchase_invoice_id], references: [id], onDelete: Restrict, map: "purchase_returns_invoice_fk")
+  suppliers             Supplier                @relation(fields: [supplier_id], references: [id], onDelete: Restrict, map: "purchase_returns_supplier_fk")
+  locations             locations               @relation(fields: [location_id], references: [id], onDelete: Restrict, map: "purchase_returns_location_fk")
+
+  @@index([purchase_invoice_id], map: "purchase_returns_invoice_idx")
+  @@index([supplier_id], map: "purchase_returns_supplier_idx")
+  @@index([location_id], map: "purchase_returns_location_idx")
+  @@index([return_date], map: "purchase_returns_date_idx")
+  @@index([status])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -787,6 +850,11 @@ enum product_status {
 enum purchase_invoice_status {
   Draft
   Received
+  Cancelled
+}
+
+enum purchase_return_status {
+  Completed
   Cancelled
 }
 
