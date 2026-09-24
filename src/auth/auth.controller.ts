@@ -18,6 +18,7 @@ import {
 import { SessionService } from './session.service';
 import { SessionAuthGuard, AuthenticatedRequest } from './session-auth.guard';
 import { StrictRateLimit } from '../security/rate-limit.decorator';
+import { AuditService } from './audit/audit.service';
 
 class LoginDto {
   @IsString()
@@ -36,6 +37,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly sessionService: SessionService,
+    private readonly auditService: AuditService,
   ) {}
 
   @Post('login')
@@ -45,11 +47,6 @@ export class AuthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const user = await this.authService.validateCredentials(
-      body.phone,
-      body.password,
-    );
-
     const ipAddress =
       typeof request.ip === 'string' ? request.ip : undefined;
 
@@ -58,11 +55,39 @@ export class AuthController {
         ? request.headers['user-agent']
         : undefined;
 
+    let user: { id: string; phone: string; full_name: string | null };
+
+    try {
+      user = await this.authService.validateCredentials(
+        body.phone,
+        body.password,
+      );
+    } catch (error) {
+      await this.auditService.record({
+        userId: null,
+        action: 'auth.login.failure',
+        entityType: 'user',
+        metadata: {
+          phone: this.authService.normalizePhone(body.phone),
+          ip: ipAddress,
+        },
+      });
+      throw error;
+    }
+
     const session = await this.authService.createSessionForUser(
       user.id,
       ipAddress,
       userAgent,
     );
+
+    await this.auditService.record({
+      userId: user.id,
+      action: 'auth.login.success',
+      entityType: 'user',
+      entityId: user.id,
+      metadata: { ip: ipAddress, user_agent: userAgent },
+    });
 
     setAuthCookie(response, session.token, session.expiresAt);
 
@@ -80,7 +105,17 @@ export class AuthController {
     const token = getAuthToken(request);
 
     if (token) {
+      const session = await this.sessionService.getActiveSession(token);
       await this.sessionService.revokeSession(token);
+
+      if (session) {
+        await this.auditService.record({
+          userId: session.user_id,
+          action: 'auth.logout',
+          entityType: 'user',
+          entityId: session.user_id,
+        });
+      }
     }
 
     clearAuthCookie(response);

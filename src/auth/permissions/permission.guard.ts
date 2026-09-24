@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { AuthenticatedRequest } from '../session-auth.guard';
 import { PERMISSIONS_KEY } from './require-permission.decorator';
 import { PermissionsService } from './permissions.service';
+import { AuditService } from '../audit/audit.service';
 
 /** Must run after SessionAuthGuard: it reads request.authSession, never re-validates the session itself. */
 @Injectable()
@@ -16,6 +17,7 @@ export class PermissionGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly permissionsService: PermissionsService,
+    private readonly auditService: AuditService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -45,6 +47,16 @@ export class PermissionGuard implements CanActivate {
     const hasPermission = required.some((code) => permissionCodes.has(code));
 
     if (!hasPermission) {
+      await this.auditService.record({
+        userId: session.user_id,
+        action: 'authz.permission.denied',
+        entityType: 'route',
+        metadata: {
+          required_permissions: required,
+          method: request.method,
+          path: request.originalUrl,
+        },
+      });
       throw new ForbiddenException('Insufficient permissions');
     }
 

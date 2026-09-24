@@ -2,9 +2,10 @@ import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@ne
 import { Reflector } from '@nestjs/core';
 import { PermissionGuard } from '../src/auth/permissions/permission.guard';
 import { PermissionsService } from '../src/auth/permissions/permissions.service';
+import { AuditService } from '../src/auth/audit/audit.service';
 
 function makeContext(authSession: unknown) {
-  const request = { authSession };
+  const request = { authSession, method: 'POST', originalUrl: '/api/probe' };
   return {
     switchToHttp: () => ({ getRequest: () => request }),
     getHandler: () => function handler() {},
@@ -15,12 +16,18 @@ function makeContext(authSession: unknown) {
 describe('PermissionGuard', () => {
   let reflector: Reflector;
   let permissionsService: { getPermissionCodes: jest.Mock };
+  let auditService: { record: jest.Mock };
   let guard: PermissionGuard;
 
   beforeEach(() => {
     reflector = new Reflector();
     permissionsService = { getPermissionCodes: jest.fn() };
-    guard = new PermissionGuard(reflector, permissionsService as unknown as PermissionsService);
+    auditService = { record: jest.fn().mockResolvedValue(undefined) };
+    guard = new PermissionGuard(
+      reflector,
+      permissionsService as unknown as PermissionsService,
+      auditService as unknown as AuditService,
+    );
   });
 
   it('allows the request when no permission metadata is present', async () => {
@@ -47,6 +54,30 @@ describe('PermissionGuard', () => {
     const ctx = makeContext({ user_id: 'u1' });
 
     await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('audits a denied permission check with user attribution and no sensitive data', async () => {
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['product.create']);
+    permissionsService.getPermissionCodes.mockResolvedValue(new Set(['product.read']));
+    const ctx = makeContext({ user_id: 'u1' });
+
+    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(auditService.record).toHaveBeenCalledTimes(1);
+    const event = auditService.record.mock.calls[0][0];
+    expect(event.userId).toBe('u1');
+    expect(event.action).toBe('authz.permission.denied');
+    expect(JSON.stringify(event)).not.toMatch(/password|token|cookie|secret/i);
+  });
+
+  it('does not audit a successful permission check', async () => {
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['product.read']);
+    permissionsService.getPermissionCodes.mockResolvedValue(new Set(['product.read']));
+    const ctx = makeContext({ user_id: 'u1' });
+
+    await guard.canActivate(ctx);
+
+    expect(auditService.record).not.toHaveBeenCalled();
   });
 
   it('throws UnauthorizedException (401) when there is no authSession', async () => {
