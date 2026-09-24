@@ -10,6 +10,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { TransactionReasonsModule } from './modules/transaction-reasons/transaction-reasons.module';
 import { PurchaseInvoicesModule } from './modules/purchase-invoices/purchase-invoices.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
+import { SupplierPaymentsModule } from './modules/supplier-payments/supplier-payments.module';
 import { PermissionsModule } from './auth/permissions/permissions.module';
 import { AuditModule } from './auth/audit/audit.module';
 
@@ -30,6 +31,7 @@ import { AuditModule } from './auth/audit/audit.module';
     TransactionReasonsModule,
     PurchaseInvoicesModule,
     SuppliersModule,
+    SupplierPaymentsModule,
     AuthModule,
     PermissionsModule,
     AuditModule,
