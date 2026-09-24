@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAdjustmentDto } from './create-adjustment.dto';
 
@@ -70,18 +71,17 @@ export class InventoryAdjustmentService {
         );
       }
 
-      const existing = await tx.inventory_stock.findUnique({
-        where: {
-          sku_id_location_id: {
-            sku_id: dto.sku_id,
-            location_id: dto.location_id,
-          },
-        },
-        select: {
-          id: true,
-          quantity: true,
-        },
-      });
+      // Row-level lock: under concurrent adjustments on the same sku/location, the second
+      // transaction blocks here until the first commits or rolls back, instead of both
+      // reading a stale quantity and racing a lost update on the later UPDATE.
+      const existingRows = await tx.$queryRaw<
+        { id: string; quantity: number }[]
+      >`
+        SELECT id, quantity FROM inventory_stock
+        WHERE sku_id = ${dto.sku_id}::uuid AND location_id = ${dto.location_id}::uuid
+        FOR UPDATE
+      `;
+      const existing = existingRows[0];
 
       const quantityBefore = existing?.quantity ?? 0;
       const quantityAfter = dto.quantity;
@@ -94,21 +94,40 @@ export class InventoryAdjustmentService {
 
       const quantityChange = quantityAfter - quantityBefore;
 
-      const stock = existing
-        ? await tx.inventory_stock.update({
-            where: { id: existing.id },
-            data: {
-              quantity: quantityAfter,
-              updated_at: new Date(),
-            },
-          })
-        : await tx.inventory_stock.create({
+      let stock;
+
+      if (existing) {
+        stock = await tx.inventory_stock.update({
+          where: { id: existing.id },
+          data: {
+            quantity: quantityAfter,
+            updated_at: new Date(),
+          },
+        });
+      } else {
+        try {
+          stock = await tx.inventory_stock.create({
             data: {
               sku_id: dto.sku_id,
               location_id: dto.location_id,
               quantity: quantityAfter,
             },
           });
+        } catch (error) {
+          // Another transaction inserted the same sku/location row first (unique
+          // constraint); the DB itself prevented the duplicate atomically. No partial
+          // state was committed here, so it's safe to ask the caller to retry.
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2002'
+          ) {
+            throw new ConflictException(
+              'Stock row was concurrently initialized for this SKU/location; please retry the adjustment',
+            );
+          }
+          throw error;
+        }
+      }
 
       const movement = await tx.inventory_movements.create({
         data: {

@@ -337,6 +337,11 @@ export class PurchaseInvoicesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // Row-level lock on the invoice: a second concurrent receive() for the same id blocks
+      // here until the first transaction commits or rolls back, then observes the up-to-date
+      // status below and is rejected — preventing a double-receive race.
+      await tx.$queryRaw`SELECT id FROM purchase_invoices WHERE id = ${invoiceId}::uuid FOR UPDATE`;
+
       const invoice = await tx.purchase_invoices.findUnique({
         where: { id: invoiceId },
         include: {
@@ -429,47 +434,31 @@ export class PurchaseInvoicesService {
           );
         }
 
-        const stock = await tx.inventory_stock.findUnique({
-          where: {
-            sku_id_location_id: {
-              sku_id: item.sku_id,
-              location_id: location.id,
-            },
-          },
-          select: {
-            id: true,
-            quantity: true,
-          },
-        });
+        // Atomic upsert-increment: a single UPDATE (or INSERT ... ON CONFLICT DO UPDATE)
+        // statement takes Postgres's own row lock for its duration, so two concurrent
+        // receives touching the same sku/location can never both read the same
+        // "before" quantity and lose one of the increments. The WHERE clause on the
+        // conflict branch makes the negative-stock check atomic with the write itself,
+        // instead of a separate read-then-check-then-write that could race.
+        const rows = await tx.$queryRaw<{ quantity: number }[]>`
+          INSERT INTO inventory_stock (sku_id, location_id, quantity, updated_at)
+          VALUES (${item.sku_id}::uuid, ${location.id}::uuid, ${item.quantity}, now())
+          ON CONFLICT (sku_id, location_id)
+          DO UPDATE SET
+            quantity = inventory_stock.quantity + EXCLUDED.quantity,
+            updated_at = now()
+          WHERE inventory_stock.quantity + EXCLUDED.quantity >= 0
+          RETURNING quantity
+        `;
 
-        const quantityBefore = stock?.quantity ?? 0;
-        const quantityAfter = quantityBefore + item.quantity;
-
-        if (quantityAfter < 0) {
+        if (rows.length === 0) {
           throw new ConflictException(
             `Stock cannot become negative for SKU ${item.product_skus.sku}`,
           );
         }
 
-        if (stock) {
-          await tx.inventory_stock.update({
-            where: { id: stock.id },
-            data: {
-              quantity: quantityAfter,
-              updated_at: new Date(),
-            },
-          });
-        } else {
-          await tx.inventory_stock.create({
-            data: {
-              id: crypto.randomUUID(),
-              sku_id: item.sku_id,
-              location_id: location.id,
-              quantity: quantityAfter,
-              updated_at: new Date(),
-            },
-          });
-        }
+        const quantityAfter = rows[0].quantity;
+        const quantityBefore = quantityAfter - item.quantity;
 
         await tx.inventory_movements.create({
           data: {
