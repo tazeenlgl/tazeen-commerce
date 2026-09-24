@@ -6,6 +6,12 @@ import { PasswordService } from './password.service';
 import { SessionService } from './session.service';
 import { PrismaService } from '../prisma/prisma.service';
 
+// A precomputed, unusable argon2id hash with no matching password. Verified against on every
+// login where the phone doesn't match an active user, so a wrong-phone response takes roughly
+// the same time as a wrong-password one (account-enumeration/timing hardening).
+const DUMMY_PASSWORD_HASH =
+  '$argon2id$v=19$m=65536,p=4,t=3$pyDUygw3737j1mfV29nB/g$Gwj6RSXn5UcSF3PuLx136Rdk99YtoRrJPL6VTkUmxx8';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -42,6 +48,12 @@ export class AuthService {
     });
 
     if (!user || String(user.status) !== 'Active') {
+      // Still pay the argon2 verify cost against a dummy hash: an unknown/inactive phone
+      // must not resolve measurably faster than a known one with a wrong password.
+      await this.passwordService.verifyPassword(
+        DUMMY_PASSWORD_HASH,
+        password,
+      );
       throw new UnauthorizedException('Invalid phone or password');
     }
 

@@ -43,7 +43,16 @@ export function getAuthToken(request: Request): string | null {
     if (cookie.startsWith(prefix)) {
       const value = cookie.slice(prefix.length);
 
-      return value ? decodeURIComponent(value) : null;
+      if (!value) {
+        return null;
+      }
+
+      // A malformed percent-encoding must never crash the request; treat it as "no session".
+      try {
+        return decodeURIComponent(value);
+      } catch {
+        return null;
+      }
     }
   }
 

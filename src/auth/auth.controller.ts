@@ -105,7 +105,7 @@ export class AuthController {
     const token = getAuthToken(request);
 
     if (token) {
-      const session = await this.sessionService.getActiveSession(token);
+      const session = await this.sessionService.peekActiveSession(token);
       await this.sessionService.revokeSession(token);
 
       if (session) {

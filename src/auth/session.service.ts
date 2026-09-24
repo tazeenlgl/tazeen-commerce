@@ -94,6 +94,38 @@ export class SessionService {
     return session;
   }
 
+  /**
+   * Read-only lookup for a still-valid session, used where the caller (e.g. logout audit
+   * attribution) must not touch last_seen_at — that would be a write with no purpose since
+   * the session is about to be revoked anyway.
+   */
+  async peekActiveSession(
+    token: string,
+  ): Promise<{ id: string; user_id: string } | null> {
+    if (!token) {
+      return null;
+    }
+
+    const sessionHash = this.hashToken(token);
+    const now = new Date();
+
+    const session = await this.prisma.sessions.findUnique({
+      where: { session_hash: sessionHash },
+      select: {
+        id: true,
+        user_id: true,
+        revoked_at: true,
+        expires_at: true,
+      },
+    });
+
+    if (!session || session.revoked_at || session.expires_at <= now) {
+      return null;
+    }
+
+    return { id: session.id, user_id: session.user_id };
+  }
+
   async revokeSession(token: string): Promise<boolean> {
     if (!token) {
       return false;
