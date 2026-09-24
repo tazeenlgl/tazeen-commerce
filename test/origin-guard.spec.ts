@@ -132,6 +132,73 @@ describe('CSRF / Origin guard', () => {
   });
 });
 
+describe('CSRF / Origin guard behind a TLS-terminating reverse proxy', () => {
+  // Simulates production: nginx terminates TLS and forwards X-Forwarded-Proto: https, but the
+  // app itself (supertest here) only ever sees a plain HTTP connection. The browser's Origin
+  // header is always https for a real HTTPS site, so this is the exact scheme mismatch that
+  // req.protocol-based same-origin comparison would get wrong if TRUST_PROXY were misconfigured.
+  let appTrustProxyOn: NestExpressApplication;
+  let appTrustProxyOff: NestExpressApplication;
+
+  beforeAll(async () => {
+    appTrustProxyOn = await makeApp({ CORS_ORIGINS: '', TRUST_PROXY: '1' });
+    appTrustProxyOff = await makeApp({ CORS_ORIGINS: '', TRUST_PROXY: 'false' });
+  });
+
+  afterAll(async () => {
+    await appTrustProxyOn.close();
+    await appTrustProxyOff.close();
+    delete process.env.CORS_ORIGINS;
+    delete process.env.TRUST_PROXY;
+  });
+
+  it('accepts a same-host HTTPS Origin over a plain HTTP connection when TRUST_PROXY=1 (correct prod config)', async () => {
+    await request(appTrustProxyOn.getHttpServer())
+      .post('/api/origin-probe')
+      .set('Host', 'pos.tazeen.in')
+      .set('X-Forwarded-Proto', 'https')
+      .set('Origin', 'https://pos.tazeen.in')
+      .send({ name: 'x' })
+      .expect(201);
+  });
+
+  it('still accepts the same request when TRUST_PROXY is left off/misconfigured (the bug being fixed)', async () => {
+    await request(appTrustProxyOff.getHttpServer())
+      .post('/api/origin-probe')
+      .set('Host', 'pos.tazeen.in')
+      .set('X-Forwarded-Proto', 'https')
+      .set('Origin', 'https://pos.tazeen.in')
+      .send({ name: 'x' })
+      .expect(201);
+  });
+
+  it('still rejects a genuinely different host even with matching scheme, proxy on or off', async () => {
+    await request(appTrustProxyOn.getHttpServer())
+      .post('/api/origin-probe')
+      .set('Host', 'pos.tazeen.in')
+      .set('X-Forwarded-Proto', 'https')
+      .set('Origin', 'https://evil.example.com')
+      .send({ name: 'x' })
+      .expect(403);
+
+    await request(appTrustProxyOff.getHttpServer())
+      .post('/api/origin-probe')
+      .set('Host', 'pos.tazeen.in')
+      .set('Origin', 'https://evil.example.com')
+      .send({ name: 'x' })
+      .expect(403);
+  });
+
+  it('rejects an Origin that is not a parseable URL (fail-closed, not treated as same-origin)', async () => {
+    await request(appTrustProxyOff.getHttpServer())
+      .post('/api/origin-probe')
+      .set('Host', 'pos.tazeen.in')
+      .set('Origin', 'not-a-valid-origin')
+      .send({ name: 'x' })
+      .expect(403);
+  });
+});
+
 describe('CSRF / Origin guard on auth endpoints', () => {
   let app: NestExpressApplication;
   let prisma: { users: { findUnique: jest.Mock } };

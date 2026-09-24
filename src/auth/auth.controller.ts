@@ -63,7 +63,7 @@ export class AuthController {
         body.password,
       );
     } catch (error) {
-      await this.auditService.record({
+      this.auditService.recordAsync({
         userId: null,
         action: 'auth.login.failure',
         entityType: 'user',
@@ -81,7 +81,7 @@ export class AuthController {
       userAgent,
     );
 
-    await this.auditService.record({
+    this.auditService.recordAsync({
       userId: user.id,
       action: 'auth.login.success',
       entityType: 'user',
@@ -109,7 +109,7 @@ export class AuthController {
       await this.sessionService.revokeSession(token);
 
       if (session) {
-        await this.auditService.record({
+        this.auditService.recordAsync({
           userId: session.user_id,
           action: 'auth.logout',
           entityType: 'user',

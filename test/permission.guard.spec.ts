@@ -16,13 +16,13 @@ function makeContext(authSession: unknown) {
 describe('PermissionGuard', () => {
   let reflector: Reflector;
   let permissionsService: { getPermissionCodes: jest.Mock };
-  let auditService: { record: jest.Mock };
+  let auditService: { recordAsync: jest.Mock };
   let guard: PermissionGuard;
 
   beforeEach(() => {
     reflector = new Reflector();
     permissionsService = { getPermissionCodes: jest.fn() };
-    auditService = { record: jest.fn().mockResolvedValue(undefined) };
+    auditService = { recordAsync: jest.fn() };
     guard = new PermissionGuard(
       reflector,
       permissionsService as unknown as PermissionsService,
@@ -63,8 +63,8 @@ describe('PermissionGuard', () => {
 
     await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ForbiddenException);
 
-    expect(auditService.record).toHaveBeenCalledTimes(1);
-    const event = auditService.record.mock.calls[0][0];
+    expect(auditService.recordAsync).toHaveBeenCalledTimes(1);
+    const event = auditService.recordAsync.mock.calls[0][0];
     expect(event.userId).toBe('u1');
     expect(event.action).toBe('authz.permission.denied');
     expect(JSON.stringify(event)).not.toMatch(/password|token|cookie|secret/i);
@@ -77,7 +77,7 @@ describe('PermissionGuard', () => {
 
     await guard.canActivate(ctx);
 
-    expect(auditService.record).not.toHaveBeenCalled();
+    expect(auditService.recordAsync).not.toHaveBeenCalled();
   });
 
   it('throws UnauthorizedException (401) when there is no authSession', async () => {

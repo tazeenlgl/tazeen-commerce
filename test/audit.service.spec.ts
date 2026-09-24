@@ -55,3 +55,50 @@ describe('AuditService', () => {
     expect(JSON.stringify(data)).not.toMatch(/password|session_hash|cookie/i);
   });
 });
+
+describe('AuditService.recordAsync (non-blocking write)', () => {
+  let prisma: { audit_logs: { create: jest.Mock } };
+  let service: AuditService;
+
+  beforeEach(() => {
+    prisma = { audit_logs: { create: jest.fn().mockResolvedValue({}) } };
+    service = new AuditService(prisma as unknown as PrismaService);
+  });
+
+  it('returns synchronously without waiting for the write to resolve', () => {
+    let resolveWrite!: () => void;
+    prisma.audit_logs.create.mockReturnValue(new Promise<void>((resolve) => (resolveWrite = resolve)));
+
+    const before = Date.now();
+    service.recordAsync({ userId: 'user-1', action: 'auth.login.success' });
+    const elapsed = Date.now() - before;
+
+    expect(elapsed).toBeLessThan(20);
+    resolveWrite(); // avoid leaking a pending timer/promise into other tests
+  });
+
+  it('still issues the write exactly once, synchronously, before returning', () => {
+    prisma.audit_logs.create.mockReturnValue(new Promise(() => {})); // never resolves
+
+    service.recordAsync({ userId: 'user-1', action: 'auth.login.success', entityId: 'user-1' });
+
+    expect(prisma.audit_logs.create).toHaveBeenCalledTimes(1);
+    expect(prisma.audit_logs.create.mock.calls[0][0].data.user_id).toBe('user-1');
+  });
+
+  it('never produces an unhandled promise rejection when the write fails', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+
+    prisma.audit_logs.create.mockRejectedValue(new Error('connection refused'));
+    service.recordAsync({ userId: 'user-1', action: 'auth.login.success' });
+
+    // Let the rejected promise's microtask queue (and any unhandledRejection check) flush.
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    process.off('unhandledRejection', onUnhandled);
+    expect(unhandled).toHaveLength(0);
+  });
+});

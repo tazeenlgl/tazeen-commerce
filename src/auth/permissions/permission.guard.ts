@@ -47,7 +47,7 @@ export class PermissionGuard implements CanActivate {
     const hasPermission = required.some((code) => permissionCodes.has(code));
 
     if (!hasPermission) {
-      await this.auditService.record({
+      this.auditService.recordAsync({
         userId: session.user_id,
         action: 'authz.permission.denied',
         entityType: 'route',

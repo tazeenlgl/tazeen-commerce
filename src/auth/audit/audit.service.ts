@@ -19,6 +19,18 @@ export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Fires one audit_logs write and returns immediately without waiting for it to finish:
+   * a slow or degraded audit store must not add latency to the auth/authz request it is
+   * recording (or risk tripping the request timeout). The write is still issued exactly
+   * once, synchronously, before this method returns — only its completion is not awaited
+   * by the caller. Never rejects; see `record`.
+   */
+  recordAsync(event: AuditEventInput): void {
+    // record() below never rejects (fully self-caught), so this is defensive, not load-bearing.
+    void this.record(event).catch(() => {});
+  }
+
+  /**
    * Writes one audit_logs row. Failures are caught and logged here, never rethrown:
    * an audit-log outage must not block or fail the authentication/authorization
    * request it is recording.
