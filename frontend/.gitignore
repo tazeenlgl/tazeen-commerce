@@ -1,0 +1,18 @@
+node_modules/
+dist/
+dist-*/
+coverage/
+logs/
+*.log
+*.local
+.env
+.env.*
+.vscode/
+.idea/
+.DS_Store
+
+# Historical source backups
+*.bak
+*.before-*
+*.backup*
+*.v1.*
