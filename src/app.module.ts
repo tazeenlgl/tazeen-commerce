@@ -10,6 +10,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { TransactionReasonsModule } from './modules/transaction-reasons/transaction-reasons.module';
 import { PurchaseInvoicesModule } from './modules/purchase-invoices/purchase-invoices.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
+import { PermissionsModule } from './auth/permissions/permissions.module';
 
 // Future (not added yet): ThrottlerModule (rate limiting), Redis cache module,
 // background-jobs module (queues), timeout interceptor.
@@ -29,6 +30,7 @@ import { SuppliersModule } from './modules/suppliers/suppliers.module';
     PurchaseInvoicesModule,
     SuppliersModule,
     AuthModule,
+    PermissionsModule,
   ],
 })
 export class AppModule {}

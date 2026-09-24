@@ -4,13 +4,16 @@ import { CreateProductDto } from './create-product.dto';
 import { UpdateProductDto } from './update-product.dto';
 import { ProductsService } from './products.service';
 import { SessionAuthGuard } from '../../auth/session-auth.guard';
+import { PermissionGuard } from '../../auth/permissions/permission.guard';
+import { RequirePermission } from '../../auth/permissions/require-permission.decorator';
 
 @Controller('catalog/products')
-@UseGuards(SessionAuthGuard)
+@UseGuards(SessionAuthGuard, PermissionGuard)
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Get()
+  @RequirePermission('product.read')
   findAll(
     @Query('status') status?: product_status,
     @Query('category_id') categoryId?: string,
@@ -26,16 +29,19 @@ export class ProductsController {
   }
 
   @Get(':id')
+  @RequirePermission('product.read')
   findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);
   }
 
   @Post()
+  @RequirePermission('product.create')
   create(@Body() dto: CreateProductDto) {
     return this.productsService.create(dto);
   }
 
   @Patch(':id')
+  @RequirePermission('product.update')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateProductDto,

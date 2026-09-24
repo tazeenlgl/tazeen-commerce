@@ -13,13 +13,16 @@ import { CreateSkuDto } from './create-sku.dto';
 import { UpdateSkuDto } from './update-sku.dto';
 import { SkusService } from './skus.service';
 import { SessionAuthGuard } from '../../auth/session-auth.guard';
+import { PermissionGuard } from '../../auth/permissions/permission.guard';
+import { RequirePermission } from '../../auth/permissions/require-permission.decorator';
 
 @Controller('catalog/products/:productId/skus')
-@UseGuards(SessionAuthGuard)
+@UseGuards(SessionAuthGuard, PermissionGuard)
 export class SkusController {
   constructor(private readonly skusService: SkusService) {}
 
   @Get()
+  @RequirePermission('sku.read')
   findAll(
     @Param('productId') productId: string,
     @Query('status') status?: sku_status,
@@ -28,6 +31,7 @@ export class SkusController {
   }
 
   @Get(':skuId')
+  @RequirePermission('sku.read')
   findOne(
     @Param('productId') productId: string,
     @Param('skuId') skuId: string,
@@ -36,6 +40,7 @@ export class SkusController {
   }
 
   @Post()
+  @RequirePermission('sku.create')
   create(
     @Param('productId') productId: string,
     @Body() dto: CreateSkuDto,
@@ -44,6 +49,7 @@ export class SkusController {
   }
 
   @Patch(':skuId')
+  @RequirePermission('sku.update')
   update(
     @Param('productId') productId: string,
     @Param('skuId') skuId: string,

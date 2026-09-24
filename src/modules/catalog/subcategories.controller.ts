@@ -13,15 +13,18 @@ import { SubcategoriesService } from './subcategories.service';
 import { CreateSubcategoryDto } from './dto/create-subcategory.dto';
 import { UpdateSubcategoryDto } from './dto/update-subcategory.dto';
 import { SessionAuthGuard } from '../../auth/session-auth.guard';
+import { PermissionGuard } from '../../auth/permissions/permission.guard';
+import { RequirePermission } from '../../auth/permissions/require-permission.decorator';
 
 @Controller('catalog/subcategories')
-@UseGuards(SessionAuthGuard)
+@UseGuards(SessionAuthGuard, PermissionGuard)
 export class SubcategoriesController {
   constructor(
     private readonly subcategoriesService: SubcategoriesService,
   ) {}
 
   @Get()
+  @RequirePermission('catalog.subcategory.read')
   findAll(
     @Query('category_id') categoryId?: string,
     @Query('status') status?: product_status,
@@ -30,16 +33,19 @@ export class SubcategoriesController {
   }
 
   @Get(':id')
+  @RequirePermission('catalog.subcategory.read')
   findOne(@Param('id') id: string) {
     return this.subcategoriesService.findOne(id);
   }
 
   @Post()
+  @RequirePermission('catalog.subcategory.create')
   create(@Body() dto: CreateSubcategoryDto) {
     return this.subcategoriesService.create(dto);
   }
 
   @Patch(':id')
+  @RequirePermission('catalog.subcategory.update')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateSubcategoryDto,

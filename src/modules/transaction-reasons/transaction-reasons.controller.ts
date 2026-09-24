@@ -12,15 +12,18 @@ import { CreateTransactionReasonDto } from './create-transaction-reason.dto';
 import { TransactionReasonsService } from './transaction-reasons.service';
 import { UpdateTransactionReasonDto } from './update-transaction-reason.dto';
 import { SessionAuthGuard } from '../../auth/session-auth.guard';
+import { PermissionGuard } from '../../auth/permissions/permission.guard';
+import { RequirePermission } from '../../auth/permissions/require-permission.decorator';
 
 @Controller('transaction-reasons')
-@UseGuards(SessionAuthGuard)
+@UseGuards(SessionAuthGuard, PermissionGuard)
 export class TransactionReasonsController {
   constructor(
     private readonly transactionReasonsService: TransactionReasonsService,
   ) {}
 
   @Get()
+  @RequirePermission('transaction_reason.read')
   findAll(
     @Query('reason_type') reasonType?: string,
     @Query('is_active') isActive?: string,
@@ -38,16 +41,19 @@ export class TransactionReasonsController {
   }
 
   @Get(':id')
+  @RequirePermission('transaction_reason.read')
   findOne(@Param('id') id: string) {
     return this.transactionReasonsService.findOne(id);
   }
 
   @Post()
+  @RequirePermission('transaction_reason.create')
   create(@Body() dto: CreateTransactionReasonDto) {
     return this.transactionReasonsService.create(dto);
   }
 
   @Patch(':id')
+  @RequirePermission('transaction_reason.update')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateTransactionReasonDto,

@@ -3,9 +3,11 @@ import { CreateAdjustmentDto } from './create-adjustment.dto';
 import { InventoryAdjustmentService } from './inventory-adjustment.service';
 import { InventoryService } from './inventory.service';
 import { SessionAuthGuard } from '../../auth/session-auth.guard';
+import { PermissionGuard } from '../../auth/permissions/permission.guard';
+import { RequirePermission } from '../../auth/permissions/require-permission.decorator';
 
 @Controller('inventory')
-@UseGuards(SessionAuthGuard)
+@UseGuards(SessionAuthGuard, PermissionGuard)
 export class InventoryController {
   constructor(
     private readonly inventoryService: InventoryService,
@@ -13,6 +15,7 @@ export class InventoryController {
   ) {}
 
   @Get('stock')
+  @RequirePermission('inventory.stock.read')
   findStock(
     @Query('sku_id') skuId?: string,
     @Query('location_id') locationId?: string,
@@ -28,6 +31,7 @@ export class InventoryController {
   }
 
   @Get('stock/:skuId/:locationId')
+  @RequirePermission('inventory.stock.read')
   findStockOne(
     @Param('skuId') skuId: string,
     @Param('locationId') locationId: string,
@@ -36,11 +40,13 @@ export class InventoryController {
   }
 
   @Post('adjustments')
+  @RequirePermission('inventory.adjust')
   createAdjustment(@Body() dto: CreateAdjustmentDto) {
     return this.inventoryAdjustmentService.create(dto);
   }
 
   @Get('movements')
+  @RequirePermission('inventory.movement.read')
   findMovements(
     @Query('sku_id') skuId?: string,
     @Query('location_id') locationId?: string,
