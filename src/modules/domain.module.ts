@@ -9,6 +9,7 @@ import { SkuModule } from './sku/sku.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { LocationsModule } from './locations/locations.module';
 import { SalesModule } from './sales/sales.module';
+import { SalesReturnsModule } from './sales-returns/sales-returns.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
@@ -28,6 +29,7 @@ const MODULES = [
   InventoryModule,
   LocationsModule,
   SalesModule,
+  SalesReturnsModule,
   InvoicesModule,
   OrdersModule,
   PaymentsModule,
