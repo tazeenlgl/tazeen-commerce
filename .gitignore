@@ -1,0 +1,19 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.log
+coverage
+*.tsbuildinfo
+
+# Local / production secrets
+secrets/
+
+# OS / editor files
+.DS_Store
+.vscode/
+.idea/
+
+# Local backups / database dumps
+backups/

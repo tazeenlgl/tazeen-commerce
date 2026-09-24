@@ -1,0 +1,952 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Supplier {
+  id                    String                  @id @default(uuid(7)) @db.Uuid
+  supplierCode          String                  @unique @map("supplier_code") @db.VarChar(50)
+  supplierName          String                  @map("supplier_name") @db.VarChar(200)
+  supplierType          SupplierType            @default(MANUFACTURER) @map("supplier_type")
+  contactPerson         String?                 @map("contact_person") @db.VarChar(200)
+  mobile                String                  @db.VarChar(20)
+  alternateMobile       String?                 @map("alternate_mobile") @db.VarChar(20)
+  email                 String?                 @db.VarChar(320)
+  gstin                 String?                 @db.VarChar(20)
+  pan                   String?                 @db.VarChar(20)
+  status                SupplierStatus          @default(ACTIVE)
+  internalNotes         String?                 @map("internal_notes")
+  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  products              products[]
+  purchase_invoices     purchase_invoices[]
+  addresses             SupplierAddress[]
+  bankAccounts          SupplierBankAccount[]
+  supplier_credit_notes supplier_credit_notes[]
+  supplier_ledger       supplier_ledger[]
+  supplier_payments     supplier_payments[]
+
+  @@index([supplierName])
+  @@index([mobile])
+  @@index([gstin])
+  @@index([status])
+  @@map("suppliers")
+}
+
+model SupplierAddress {
+  id           String              @id @default(uuid(7)) @db.Uuid
+  supplierId   String              @map("supplier_id") @db.Uuid
+  addressType  SupplierAddressType @default(OFFICE) @map("address_type")
+  addressLine1 String?             @map("address_line_1") @db.VarChar(300)
+  addressLine2 String?             @map("address_line_2") @db.VarChar(300)
+  city         String?             @db.VarChar(100)
+  state        String?             @db.VarChar(100)
+  pinCode      String?             @map("pin_code") @db.VarChar(10)
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  supplier     Supplier            @relation(fields: [supplierId], references: [id])
+
+  @@index([supplierId])
+  @@map("supplier_addresses")
+}
+
+model SupplierBankAccount {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  supplierId        String   @map("supplier_id") @db.Uuid
+  bankName          String?  @map("bank_name") @db.VarChar(200)
+  accountNumber     String?  @map("account_number") @db.VarChar(34)
+  ifsc              String?  @db.VarChar(20)
+  branch            String?  @db.VarChar(200)
+  accountHolderName String?  @map("account_holder_name") @db.VarChar(200)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  supplier          Supplier @relation(fields: [supplierId], references: [id])
+
+  @@index([supplierId])
+  @@map("supplier_bank_accounts")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model customer_coupons {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code               String        @unique @db.VarChar(50)
+  customer_id        String        @db.Uuid
+  value              Decimal       @db.Decimal(14, 2)
+  issue_date         DateTime      @db.Date
+  expiry_date        DateTime      @db.Date
+  status             coupon_status @default(Active)
+  claimed_date       DateTime?     @db.Date
+  claimed_invoice_id String?       @db.Uuid
+  created_at         DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime      @default(now()) @db.Timestamptz(6)
+  customers          customers     @relation(fields: [customer_id], references: [id], map: "customer_coupons_customer_fk")
+
+  @@index([customer_id], map: "customer_coupons_customer_idx")
+  @@index([expiry_date], map: "customer_coupons_expiry_idx")
+  @@index([claimed_invoice_id], map: "customer_coupons_invoice_idx")
+  @@index([status])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model customer_points_accounts {
+  id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customer_id                  String                         @unique @db.Uuid
+  balance                      Int                            @default(0)
+  created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  customers                    customers                      @relation(fields: [customer_id], references: [id], map: "customer_points_accounts_customer_fk")
+  customer_points_transactions customer_points_transactions[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model customer_points_transactions {
+  id                       String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  points_account_id        String                   @db.Uuid
+  transaction_type         points_transaction_type
+  reference_type           String?                  @db.VarChar(50)
+  reference_id             String?                  @db.Uuid
+  points_change            Int
+  balance_before           Int
+  balance_after            Int
+  expires_at               DateTime?                @db.Date
+  reason                   String?
+  created_at               DateTime                 @default(now()) @db.Timestamptz(6)
+  customer_points_accounts customer_points_accounts @relation(fields: [points_account_id], references: [id], map: "customer_points_transactions_account_fk")
+
+  @@index([points_account_id], map: "customer_points_transactions_account_idx")
+  @@index([created_at])
+  @@index([expires_at], map: "customer_points_transactions_expiry_idx")
+  @@index([reference_type, reference_id], map: "customer_points_transactions_reference_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model customer_wallet_transactions {
+  id               String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  wallet_id        String                  @db.Uuid
+  transaction_type wallet_transaction_type
+  reference_type   String?                 @db.VarChar(50)
+  reference_id     String?                 @db.Uuid
+  amount           Decimal                 @db.Decimal(14, 2)
+  balance_before   Decimal                 @db.Decimal(14, 2)
+  balance_after    Decimal                 @db.Decimal(14, 2)
+  reason           String?
+  created_at       DateTime                @default(now()) @db.Timestamptz(6)
+  customer_wallets customer_wallets        @relation(fields: [wallet_id], references: [id], map: "customer_wallet_transactions_wallet_fk")
+
+  @@index([created_at])
+  @@index([reference_type, reference_id], map: "customer_wallet_transactions_reference_idx")
+  @@index([wallet_id], map: "customer_wallet_transactions_wallet_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model customer_wallets {
+  id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customer_id                  String                         @unique @db.Uuid
+  balance                      Decimal                        @default(0) @db.Decimal(14, 2)
+  created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  customer_wallet_transactions customer_wallet_transactions[]
+  customers                    customers                      @relation(fields: [customer_id], references: [id], map: "customer_wallets_customer_fk")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model customers {
+  id                       String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customer_id              String                    @unique @db.VarChar(20)
+  phone                    String                    @unique @db.VarChar(10)
+  name                     String?                   @db.VarChar(200)
+  email                    String?                   @db.VarChar(320)
+  address                  String?
+  whatsapp_status          String?                   @db.VarChar(20)
+  status                   customer_status           @default(Active)
+  created_at               DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                  @default(now()) @db.Timestamptz(6)
+  customer_coupons         customer_coupons[]
+  customer_points_accounts customer_points_accounts?
+  customer_wallets         customer_wallets?
+  gift_vouchers            gift_vouchers[]
+  sales_invoices           sales_invoices[]
+  sales_returns            sales_returns[]
+
+  @@index([name])
+  @@index([status])
+}
+
+model exchange_holidays {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  holiday_date DateTime @unique @db.Date
+  holiday_name String   @db.VarChar(200)
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([is_active], map: "exchange_holidays_active_idx")
+  @@index([holiday_date], map: "exchange_holidays_date_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model exchange_replacement_items {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sales_return_id String        @db.Uuid
+  product_id      String        @db.Uuid
+  sku_id          String        @db.Uuid
+  quantity        Int
+  mrp             Decimal       @db.Decimal(14, 2)
+  discount_amount Decimal       @default(0) @db.Decimal(14, 2)
+  net_value       Decimal       @db.Decimal(14, 2)
+  created_at      DateTime      @default(now()) @db.Timestamptz(6)
+  products        products      @relation(fields: [product_id], references: [id], map: "exchange_replacement_items_product_fk")
+  sales_returns   sales_returns @relation(fields: [sales_return_id], references: [id], map: "exchange_replacement_items_return_fk")
+  product_skus    product_skus  @relation(fields: [sku_id], references: [id], map: "exchange_replacement_items_sku_fk")
+
+  @@index([sales_return_id], map: "exchange_replacement_items_return_idx")
+  @@index([sku_id], map: "exchange_replacement_items_sku_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model gift_voucher_transactions {
+  id               String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  voucher_id       String                        @db.Uuid
+  transaction_type gift_voucher_transaction_type
+  reference_type   String?                       @db.VarChar(50)
+  reference_id     String?                       @db.Uuid
+  amount           Decimal                       @db.Decimal(14, 2)
+  balance_before   Decimal                       @db.Decimal(14, 2)
+  balance_after    Decimal                       @db.Decimal(14, 2)
+  reason           String?
+  created_at       DateTime                      @default(now()) @db.Timestamptz(6)
+  gift_vouchers    gift_vouchers                 @relation(fields: [voucher_id], references: [id], map: "gift_voucher_transactions_voucher_fk")
+
+  @@index([created_at])
+  @@index([reference_type, reference_id], map: "gift_voucher_transactions_reference_idx")
+  @@index([voucher_id], map: "gift_voucher_transactions_voucher_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model gift_vouchers {
+  id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  voucher_no                String                      @unique @db.VarChar(50)
+  customer_id               String                      @db.Uuid
+  denomination              Decimal                     @db.Decimal(14, 2)
+  used_amount               Decimal                     @default(0) @db.Decimal(14, 2)
+  balance                   Decimal                     @db.Decimal(14, 2)
+  issue_date                DateTime                    @db.Date
+  expiry_date               DateTime                    @db.Date
+  status                    gift_voucher_status         @default(Active)
+  created_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  gift_voucher_transactions gift_voucher_transactions[]
+  customers                 customers                   @relation(fields: [customer_id], references: [id], map: "gift_vouchers_customer_fk")
+
+  @@index([customer_id], map: "gift_vouchers_customer_idx")
+  @@index([expiry_date], map: "gift_vouchers_expiry_idx")
+  @@index([status])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model inventory_movements {
+  id              String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sku_id          String                  @db.Uuid
+  location_id     String                  @db.Uuid
+  movement_type   inventory_movement_type
+  quantity_change Int
+  quantity_before Int
+  quantity_after  Int
+  reference_type  String?                 @db.VarChar(50)
+  reference_id    String?                 @db.Uuid
+  reason          String?
+  created_at      DateTime                @default(now()) @db.Timestamptz(6)
+  locations       locations               @relation(fields: [location_id], references: [id], map: "inventory_movements_location_fk")
+  product_skus    product_skus            @relation(fields: [sku_id], references: [id], map: "inventory_movements_sku_fk")
+
+  @@index([created_at])
+  @@index([location_id], map: "inventory_movements_location_idx")
+  @@index([reference_type, reference_id], map: "inventory_movements_reference_idx")
+  @@index([sku_id], map: "inventory_movements_sku_idx")
+  @@index([movement_type], map: "inventory_movements_type_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model inventory_stock {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sku_id       String       @db.Uuid
+  location_id  String       @db.Uuid
+  quantity     Int          @default(0)
+  created_at   DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime     @default(now()) @db.Timestamptz(6)
+  locations    locations    @relation(fields: [location_id], references: [id], map: "inventory_stock_location_fk")
+  product_skus product_skus @relation(fields: [sku_id], references: [id], map: "inventory_stock_sku_fk")
+
+  @@unique([sku_id, location_id], map: "inventory_stock_sku_location_unique")
+  @@index([location_id], map: "inventory_stock_location_idx")
+  @@index([sku_id], map: "inventory_stock_sku_idx")
+}
+
+model locations {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  location_code       String                @unique @db.VarChar(50)
+  location_name       String                @db.VarChar(150)
+  location_type       location_type
+  status              location_status       @default(Active)
+  is_default          Boolean               @default(false)
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  inventory_movements inventory_movements[]
+  inventory_stock     inventory_stock[]
+  sales_invoices      sales_invoices[]
+  sales_returns       sales_returns[]
+
+  @@index([is_default], map: "locations_default_idx")
+  @@index([location_name], map: "locations_name_idx")
+  @@index([status])
+  @@index([location_type], map: "locations_type_idx")
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model product_categories {
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category_code         String                  @unique @db.VarChar(50)
+  category_name         String                  @db.VarChar(150)
+  description           String?
+  status                product_status          @default(Active)
+  created_at            DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime                @default(now()) @db.Timestamptz(6)
+  product_subcategories product_subcategories[]
+  products              products[]
+
+  @@index([status])
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model product_sku_attributes {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sku_id          String       @db.Uuid
+  attribute_name  String       @db.VarChar(100)
+  attribute_value String       @db.VarChar(150)
+  created_at      DateTime     @default(now()) @db.Timestamptz(6)
+  product_skus    product_skus @relation(fields: [sku_id], references: [id], onDelete: Cascade, map: "product_sku_attributes_sku_fk")
+
+  @@index([sku_id], map: "product_sku_attributes_sku_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model product_skus {
+  id                         String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  product_id                 String                       @db.Uuid
+  sku                        String                       @unique @db.VarChar(50)
+  sequence_no                Int
+  mrp                        Decimal                      @db.Decimal(14, 2)
+  status                     sku_status                   @default(Active)
+  created_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  exchange_replacement_items exchange_replacement_items[]
+  inventory_movements        inventory_movements[]
+  inventory_stock            inventory_stock[]
+  product_sku_attributes     product_sku_attributes[]
+  products                   products                     @relation(fields: [product_id], references: [id], map: "product_skus_product_fk")
+  purchase_invoice_items     purchase_invoice_items[]
+  sales_invoice_items        sales_invoice_items[]
+  sales_return_items         sales_return_items[]
+
+  @@unique([product_id, sequence_no], map: "product_skus_sequence_unique")
+  @@index([product_id], map: "product_skus_product_idx")
+  @@index([status])
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model product_subcategories {
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category_id        String             @db.Uuid
+  subcategory_code   String             @unique @db.VarChar(50)
+  subcategory_name   String             @db.VarChar(150)
+  status             product_status     @default(Active)
+  created_at         DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime           @default(now()) @db.Timestamptz(6)
+  product_categories product_categories @relation(fields: [category_id], references: [id], map: "product_subcategories_category_fk")
+  products           products[]
+
+  @@index([category_id], map: "product_subcategories_category_idx")
+  @@index([status])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model products {
+  id                         String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  product_id                 String                       @unique @db.VarChar(50)
+  core_sku                   String                       @unique @db.VarChar(50)
+  product_name               String                       @db.VarChar(200)
+  category_id                String                       @db.Uuid
+  subcategory_id             String?                      @db.Uuid
+  supplier_id                String?                      @db.Uuid
+  brand                      String?                      @db.VarChar(150)
+  hsn                        String?                      @db.VarChar(20)
+  gst_rate                   Decimal                      @db.Decimal(5, 2)
+  purchase_rate              Decimal                      @db.Decimal(14, 2)
+  status                     product_status               @default(Active)
+  created_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  exchange_replacement_items exchange_replacement_items[]
+  product_skus               product_skus[]
+  product_categories         product_categories           @relation(fields: [category_id], references: [id], map: "products_category_fk")
+  product_subcategories      product_subcategories?       @relation(fields: [subcategory_id], references: [id], onDelete: Restrict, map: "products_subcategory_fk")
+  suppliers                  Supplier?                    @relation(fields: [supplier_id], references: [id], onDelete: Restrict, map: "products_supplier_fk")
+  purchase_invoice_items     purchase_invoice_items[]
+  sales_invoice_items        sales_invoice_items[]
+  sales_return_items         sales_return_items[]
+
+  @@index([category_id], map: "products_category_idx")
+  @@index([product_name], map: "products_name_idx")
+  @@index([status])
+  @@index([subcategory_id], map: "products_subcategory_idx")
+  @@index([supplier_id], map: "products_supplier_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model purchase_invoice_items {
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchase_invoice_id String            @db.Uuid
+  sku_id              String            @db.Uuid
+  product_id          String            @db.Uuid
+  quantity            Int
+  purchase_rate       Decimal           @db.Decimal(14, 2)
+  gst_rate            Decimal           @db.Decimal(5, 2)
+  taxable_value       Decimal           @db.Decimal(14, 2)
+  cgst_amount         Decimal           @default(0) @db.Decimal(14, 2)
+  sgst_amount         Decimal           @default(0) @db.Decimal(14, 2)
+  igst_amount         Decimal           @default(0) @db.Decimal(14, 2)
+  gst_amount          Decimal           @db.Decimal(14, 2)
+  total_value         Decimal           @db.Decimal(14, 2)
+  created_at          DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime          @default(now()) @db.Timestamptz(6)
+  purchase_invoices   purchase_invoices @relation(fields: [purchase_invoice_id], references: [id], map: "purchase_invoice_items_invoice_fk")
+  products            products          @relation(fields: [product_id], references: [id], map: "purchase_invoice_items_product_fk")
+  product_skus        product_skus      @relation(fields: [sku_id], references: [id], map: "purchase_invoice_items_sku_fk")
+
+  @@index([purchase_invoice_id], map: "purchase_invoice_items_invoice_idx")
+  @@index([product_id], map: "purchase_invoice_items_product_idx")
+  @@index([sku_id], map: "purchase_invoice_items_sku_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model purchase_invoices {
+  id                     String                   @id @db.Uuid
+  supplier_id            String                   @db.Uuid
+  supplier_name          String                   @db.VarChar(200)
+  supplier_state         String?                  @db.VarChar(100)
+  invoice_no             String                   @db.VarChar(100)
+  purchase_date          DateTime                 @db.Date
+  location               String                   @db.VarChar(100)
+  items_count            Int
+  taxable_value          Decimal                  @db.Decimal(14, 2)
+  gst_rate               Decimal                  @db.Decimal(5, 2)
+  gst_amount             Decimal                  @db.Decimal(14, 2)
+  final_value            Decimal                  @db.Decimal(14, 2)
+  document_name          String                   @db.VarChar(255)
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  status                 purchase_invoice_status  @default(Draft)
+  subtotal               Decimal                  @default(0) @db.Decimal(14, 2)
+  cgst_amount            Decimal                  @default(0) @db.Decimal(14, 2)
+  sgst_amount            Decimal                  @default(0) @db.Decimal(14, 2)
+  igst_amount            Decimal                  @default(0) @db.Decimal(14, 2)
+  received_at            DateTime?                @db.Timestamptz(6)
+  purchase_invoice_items purchase_invoice_items[]
+  suppliers              Supplier                 @relation(fields: [supplier_id], references: [id])
+  supplier_credit_notes  supplier_credit_notes[]
+
+  @@index([invoice_no])
+  @@index([purchase_date])
+  @@index([supplier_id])
+  @@index([supplier_name])
+  @@index([supplier_state])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model sales_invoice_items {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sales_invoice_id   String               @db.Uuid
+  product_id         String               @db.Uuid
+  sku_id             String               @db.Uuid
+  quantity           Int
+  mrp                Decimal              @db.Decimal(14, 2)
+  discount_type      String?              @db.VarChar(20)
+  discount_value     Decimal              @default(0) @db.Decimal(14, 2)
+  discount_amount    Decimal              @default(0) @db.Decimal(14, 2)
+  net_value          Decimal              @db.Decimal(14, 2)
+  gst_rate           Decimal              @db.Decimal(5, 2)
+  taxable_value      Decimal              @db.Decimal(14, 2)
+  cgst_amount        Decimal              @default(0) @db.Decimal(14, 2)
+  sgst_amount        Decimal              @default(0) @db.Decimal(14, 2)
+  igst_amount        Decimal              @default(0) @db.Decimal(14, 2)
+  gst_amount         Decimal              @default(0) @db.Decimal(14, 2)
+  total_value        Decimal              @db.Decimal(14, 2)
+  created_at         DateTime             @default(now()) @db.Timestamptz(6)
+  sales_invoices     sales_invoices       @relation(fields: [sales_invoice_id], references: [id], map: "sales_invoice_items_invoice_fk")
+  products           products             @relation(fields: [product_id], references: [id], map: "sales_invoice_items_product_fk")
+  product_skus       product_skus         @relation(fields: [sku_id], references: [id], map: "sales_invoice_items_sku_fk")
+  sales_return_items sales_return_items[]
+
+  @@index([sales_invoice_id], map: "sales_invoice_items_invoice_idx")
+  @@index([product_id], map: "sales_invoice_items_product_idx")
+  @@index([sku_id], map: "sales_invoice_items_sku_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model sales_invoice_payments {
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sales_invoice_id  String               @db.Uuid
+  payment_method    sales_payment_method
+  amount            Decimal              @db.Decimal(14, 2)
+  payment_reference String?              @db.VarChar(150)
+  card_charge       Decimal              @default(0) @db.Decimal(14, 2)
+  created_at        DateTime             @default(now()) @db.Timestamptz(6)
+  sales_invoices    sales_invoices       @relation(fields: [sales_invoice_id], references: [id], map: "sales_invoice_payments_invoice_fk")
+
+  @@index([sales_invoice_id], map: "sales_invoice_payments_invoice_idx")
+  @@index([payment_method], map: "sales_invoice_payments_method_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model sales_invoices {
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoice_no             String                   @unique @db.VarChar(50)
+  customer_id            String?                  @db.Uuid
+  location_id            String                   @db.Uuid
+  invoice_date           DateTime                 @default(now()) @db.Timestamptz(6)
+  subtotal               Decimal                  @db.Decimal(14, 2)
+  item_discount          Decimal                  @default(0) @db.Decimal(14, 2)
+  bill_discount          Decimal                  @default(0) @db.Decimal(14, 2)
+  taxable_value          Decimal                  @db.Decimal(14, 2)
+  cgst_amount            Decimal                  @default(0) @db.Decimal(14, 2)
+  sgst_amount            Decimal                  @default(0) @db.Decimal(14, 2)
+  igst_amount            Decimal                  @default(0) @db.Decimal(14, 2)
+  gst_amount             Decimal                  @default(0) @db.Decimal(14, 2)
+  final_payable          Decimal                  @db.Decimal(14, 2)
+  status                 sales_invoice_status     @default(Completed)
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  sales_invoice_items    sales_invoice_items[]
+  sales_invoice_payments sales_invoice_payments[]
+  customers              customers?               @relation(fields: [customer_id], references: [id], onDelete: Restrict, map: "sales_invoices_customer_fk")
+  locations              locations                @relation(fields: [location_id], references: [id], map: "sales_invoices_location_fk")
+  sales_returns          sales_returns[]
+
+  @@index([customer_id], map: "sales_invoices_customer_idx")
+  @@index([invoice_date], map: "sales_invoices_date_idx")
+  @@index([location_id], map: "sales_invoices_location_idx")
+  @@index([status])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model sales_return_items {
+  id                       String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sales_return_id          String              @db.Uuid
+  original_invoice_item_id String              @db.Uuid
+  product_id               String              @db.Uuid
+  sku_id                   String              @db.Uuid
+  quantity                 Int
+  unit_value               Decimal             @db.Decimal(14, 2)
+  total_value              Decimal             @db.Decimal(14, 2)
+  created_at               DateTime            @default(now()) @db.Timestamptz(6)
+  sales_invoice_items      sales_invoice_items @relation(fields: [original_invoice_item_id], references: [id], map: "sales_return_items_invoice_item_fk")
+  products                 products            @relation(fields: [product_id], references: [id], map: "sales_return_items_product_fk")
+  sales_returns            sales_returns       @relation(fields: [sales_return_id], references: [id], map: "sales_return_items_return_fk")
+  product_skus             product_skus        @relation(fields: [sku_id], references: [id], map: "sales_return_items_sku_fk")
+
+  @@index([original_invoice_item_id], map: "sales_return_items_invoice_item_idx")
+  @@index([sales_return_id], map: "sales_return_items_return_idx")
+  @@index([sku_id], map: "sales_return_items_sku_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model sales_return_settlements {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sales_return_id String        @db.Uuid
+  settlement_type String        @db.VarChar(30)
+  amount          Decimal       @db.Decimal(14, 2)
+  reference_type  String?       @db.VarChar(50)
+  reference_id    String?       @db.Uuid
+  created_at      DateTime      @default(now()) @db.Timestamptz(6)
+  sales_returns   sales_returns @relation(fields: [sales_return_id], references: [id], map: "sales_return_settlements_return_fk")
+
+  @@index([reference_type, reference_id], map: "sales_return_settlements_reference_idx")
+  @@index([sales_return_id], map: "sales_return_settlements_return_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model sales_returns {
+  id                         String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  return_no                  String                       @unique @db.VarChar(50)
+  original_invoice_id        String                       @db.Uuid
+  customer_id                String?                      @db.Uuid
+  location_id                String                       @db.Uuid
+  return_type                sales_return_type
+  return_date                DateTime                     @default(now()) @db.Timestamptz(6)
+  reason                     String                       @db.VarChar(200)
+  reason_note                String?
+  is_special_exception       Boolean                      @default(false)
+  status                     sales_return_status          @default(Draft)
+  original_value             Decimal                      @default(0) @db.Decimal(14, 2)
+  replacement_value          Decimal                      @default(0) @db.Decimal(14, 2)
+  settlement_amount          Decimal                      @default(0) @db.Decimal(14, 2)
+  created_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  exchange_replacement_items exchange_replacement_items[]
+  sales_return_items         sales_return_items[]
+  sales_return_settlements   sales_return_settlements[]
+  customers                  customers?                   @relation(fields: [customer_id], references: [id], onDelete: Restrict, map: "sales_returns_customer_fk")
+  locations                  locations                    @relation(fields: [location_id], references: [id], map: "sales_returns_location_fk")
+  sales_invoices             sales_invoices               @relation(fields: [original_invoice_id], references: [id], map: "sales_returns_original_invoice_fk")
+
+  @@index([customer_id], map: "sales_returns_customer_idx")
+  @@index([return_date], map: "sales_returns_date_idx")
+  @@index([location_id], map: "sales_returns_location_idx")
+  @@index([original_invoice_id], map: "sales_returns_original_invoice_idx")
+  @@index([status])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model supplier_credit_notes {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supplier_id         String             @db.Uuid
+  purchase_invoice_id String?            @db.Uuid
+  amount              Decimal            @db.Decimal(14, 2)
+  status              String             @default("Pending") @db.VarChar(30)
+  notes               String?
+  created_at          DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime           @default(now()) @db.Timestamptz(6)
+  purchase_invoices   purchase_invoices? @relation(fields: [purchase_invoice_id], references: [id], onDelete: Restrict, map: "supplier_credit_notes_invoice_fk")
+  suppliers           Supplier           @relation(fields: [supplier_id], references: [id], map: "supplier_credit_notes_supplier_fk")
+
+  @@index([purchase_invoice_id], map: "supplier_credit_notes_invoice_idx")
+  @@index([status])
+  @@index([supplier_id], map: "supplier_credit_notes_supplier_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model supplier_ledger {
+  id             String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supplier_id    String                     @db.Uuid
+  entry_type     supplier_ledger_entry_type
+  reference_type String?                    @db.VarChar(50)
+  reference_id   String?                    @db.Uuid
+  debit_amount   Decimal                    @default(0) @db.Decimal(14, 2)
+  credit_amount  Decimal                    @default(0) @db.Decimal(14, 2)
+  balance_after  Decimal                    @db.Decimal(14, 2)
+  notes          String?
+  created_at     DateTime                   @default(now()) @db.Timestamptz(6)
+  suppliers      Supplier                   @relation(fields: [supplier_id], references: [id], map: "supplier_ledger_supplier_fk")
+
+  @@index([created_at])
+  @@index([reference_type, reference_id], map: "supplier_ledger_reference_idx")
+  @@index([supplier_id], map: "supplier_ledger_supplier_idx")
+  @@index([entry_type], map: "supplier_ledger_type_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model supplier_payments {
+  id               String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supplier_id      String                  @db.Uuid
+  amount           Decimal                 @db.Decimal(14, 2)
+  payment_method   supplier_payment_method
+  payment_status   supplier_payment_status @default(Pending)
+  payment_date     DateTime                @db.Date
+  reference_number String?                 @db.VarChar(150)
+  proof_file_name  String?                 @db.VarChar(255)
+  notes            String?
+  created_at       DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime                @default(now()) @db.Timestamptz(6)
+  suppliers        Supplier                @relation(fields: [supplier_id], references: [id], map: "supplier_payments_supplier_fk")
+
+  @@index([payment_date], map: "supplier_payments_date_idx")
+  @@index([payment_status], map: "supplier_payments_status_idx")
+  @@index([supplier_id], map: "supplier_payments_supplier_idx")
+}
+
+model system_settings {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  setting_key   String   @unique @db.VarChar(100)
+  setting_value String
+  description   String?
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([is_active], map: "system_settings_active_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model transaction_reasons {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reason_type String   @db.VarChar(50)
+  reason_name String   @db.VarChar(200)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([is_active], map: "transaction_reasons_active_idx")
+  @@index([reason_type], map: "transaction_reasons_type_idx")
+}
+
+enum SupplierType {
+  MANUFACTURER @map("Manufacturer")
+  WHOLESALER   @map("Wholesaler")
+  DISTRIBUTOR  @map("Distributor")
+  BRAND        @map("Brand")
+  OTHER        @map("Other")
+
+  @@map("supplier_type")
+}
+
+enum SupplierStatus {
+  ACTIVE   @map("Active")
+  INACTIVE @map("Inactive")
+
+  @@map("supplier_status")
+}
+
+enum SupplierAddressType {
+  OFFICE           @map("Office")
+  SALE_OFFICE      @map("Sale Office")
+  HEAD_OFFICE      @map("Head Office")
+  BILLING_ADDRESS  @map("Billing Address")
+  SHIPPING_ADDRESS @map("Shipping Address")
+  OTHER            @map("Other")
+
+  @@map("supplier_address_type")
+}
+
+enum coupon_status {
+  Active
+  Claimed
+  Expired
+  Cancelled
+}
+
+enum customer_status {
+  Active
+  Inactive
+}
+
+enum gift_voucher_status {
+  Active
+  Redeemed
+  Expired
+  Cancelled
+}
+
+enum gift_voucher_transaction_type {
+  Issued
+  Redeemed
+  Adjustment
+  Cancellation
+}
+
+enum inventory_movement_type {
+  Opening_Stock   @map("Opening Stock")
+  Purchase
+  Sale
+  Transfer_In     @map("Transfer In")
+  Transfer_Out    @map("Transfer Out")
+  Purchase_Return @map("Purchase Return")
+  Customer_Return @map("Customer Return")
+  Exchange_Return @map("Exchange Return")
+  Adjustment
+}
+
+enum location_status {
+  Active
+  Inactive
+}
+
+enum location_type {
+  Warehouse
+  Retail_Store @map("Retail Store")
+}
+
+enum points_transaction_type {
+  Sale_Earn         @map("Sale Earn")
+  Return_Reversal   @map("Return Reversal")
+  Exchange_Reversal @map("Exchange Reversal")
+  Manual_Credit     @map("Manual Credit")
+  Manual_Debit      @map("Manual Debit")
+  Expiry
+}
+
+enum product_status {
+  Active
+  Inactive
+}
+
+enum purchase_invoice_status {
+  Draft
+  Received
+  Cancelled
+}
+
+enum sales_invoice_status {
+  Completed
+  Exchanged
+  Cancelled
+}
+
+enum sales_payment_method {
+  Cash
+  UPI
+  Wallet
+  Points
+  Gift_Voucher @map("Gift Voucher")
+  Coupon
+  Credit_Card  @map("Credit Card")
+  Debit_Card   @map("Debit Card")
+}
+
+enum sales_return_status {
+  Draft
+  Completed
+  Cancelled
+}
+
+enum sales_return_type {
+  Return
+  Exchange
+}
+
+enum sku_status {
+  Active
+  Inactive
+}
+
+enum supplier_ledger_entry_type {
+  Purchase_Invoice @map("Purchase Invoice")
+  Purchase_Return  @map("Purchase Return")
+  Payment
+  Credit_Note      @map("Credit Note")
+  Advance
+  Adjustment
+}
+
+enum supplier_payment_method {
+  Bank_Transfer @map("Bank Transfer")
+  UPI
+}
+
+enum supplier_payment_status {
+  Pending
+  Completed
+  Cancelled
+}
+
+enum wallet_transaction_type {
+  Return_Credit       @map("Return Credit")
+  Exchange_Difference @map("Exchange Difference")
+  Cashback
+  Manual_Credit       @map("Manual Credit")
+  Manual_Debit        @map("Manual Debit")
+  Payment
+}
+
+enum user_status {
+  Active
+  Inactive
+}
+
+model users {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  phone         String    @unique @db.VarChar(10)
+  password_hash String    @db.VarChar(255)
+  status        user_status @default(Active)
+  full_name     String?   @db.VarChar(200)
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime  @default(now()) @db.Timestamptz(6)
+
+  user_roles user_roles[]
+  sessions   sessions[]
+  audit_logs audit_logs[]
+
+  @@index([status], map: "users_status_idx")
+}
+
+model roles {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  name        String   @unique @db.VarChar(100)
+  description String?  @db.VarChar(300)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  user_roles       user_roles[]
+  role_permissions role_permissions[]
+}
+
+model permissions {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  code        String   @unique @db.VarChar(150)
+  description String?  @db.VarChar(300)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  role_permissions role_permissions[]
+}
+
+model user_roles {
+  user_id    String   @db.Uuid
+  role_id    String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "user_roles_user_fk")
+  roles roles @relation(fields: [role_id], references: [id], onDelete: Restrict, map: "user_roles_role_fk")
+
+  @@id([user_id, role_id])
+  @@index([role_id], map: "user_roles_role_idx")
+}
+
+model role_permissions {
+  role_id       String   @db.Uuid
+  permission_id String   @db.Uuid
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  roles       roles       @relation(fields: [role_id], references: [id], onDelete: Cascade, map: "role_permissions_role_fk")
+  permissions permissions @relation(fields: [permission_id], references: [id], onDelete: Restrict, map: "role_permissions_permission_fk")
+
+  @@id([role_id, permission_id])
+  @@index([permission_id], map: "role_permissions_permission_idx")
+}
+
+model sessions {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  user_id       String    @db.Uuid
+  session_hash  String    @unique @db.VarChar(255)
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at    DateTime  @db.Timestamptz(6)
+  revoked_at    DateTime? @db.Timestamptz(6)
+  last_seen_at  DateTime? @db.Timestamptz(6)
+  ip_address    String?   @db.VarChar(45)
+  user_agent    String?   @db.VarChar(300)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "sessions_user_fk")
+
+  @@index([user_id], map: "sessions_user_idx")
+  @@index([expires_at], map: "sessions_expires_idx")
+}
+
+model audit_logs {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  user_id     String?  @db.Uuid
+  action      String   @db.VarChar(150)
+  entity_type String?  @db.VarChar(100)
+  entity_id   String?  @db.Uuid
+  metadata    Json?
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  users users? @relation(fields: [user_id], references: [id], onDelete: SetNull, map: "audit_logs_user_fk")
+
+  @@index([user_id], map: "audit_logs_user_idx")
+  @@index([entity_type, entity_id], map: "audit_logs_entity_idx")
+  @@index([created_at], map: "audit_logs_created_idx")
+}
